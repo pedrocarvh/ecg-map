@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="pt">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Mapa Interativo</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.7.1/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet@1.7.1/dist/leaflet.js"></script>
+  <style>
+    #map {
+      height: 600px;
+    }
+  </style>
+</head>
+
+<body>
+  <h2>Mapa de Laudos por Município - Amazonas</h2>
+
+  <div id="map"></div>
+
+  <script>
+    var map = L.map('map', {
+      center: [-3.4168, -65.8561],
+      zoom: 6,
+      zoom: 6,
+      zoomControl: false,
+      scrollWheelZoom: false,
+      touchZoom: false,
+      doubleClickZoom: false
+    });
+
+    function getColor(d) {
+      if (d === 0) return '#f7fcf5';
+
+      return d <= 150 ? '#e5f5e0' :
+        d <= 550 ? '#c7e9c0' :
+          d <= 1250 ? '#a1d99b' :
+            d <= 1700 ? '#74c476' :
+              d <= 2700 ? '#41ab5d' :
+                d <= 3100 ? '#238b45' :
+                  '#005a32';
+    }
+
+    async function fetchData() {
+      try {
+        const geojsonResponse = await fetch('geojson-am.json');
+        const geojsonData = await geojsonResponse.json();
+
+        const dataResponse = await fetch('data.json');
+        const municipiosData = await dataResponse.json();
+
+        const laudosPorMunicipio = {};
+
+        const laudosValues = municipiosData.municipios.map(municipio => municipio.laudos_ecg);
+        const minLaudos = Math.min(...laudosValues);
+        const maxLaudos = Math.max(...laudosValues);
+
+        municipiosData.municipios.forEach(municipio => {
+          laudosPorMunicipio[municipio.nome] = municipio.laudos_ecg;
+        });
+
+        geojsonData.features.forEach(feature => {
+          const municipioNome = feature.properties.name;
+          feature.properties.laudos_ecg = laudosPorMunicipio[municipioNome] || 0;
+        });
+
+        L.geoJSON(geojsonData, {
+          style: function (feature) {
+            return {
+              fillColor: getColor(feature.properties.laudos_ecg),
+              weight: 1,
+              opacity: 1,
+              color: 'black',
+              dashArray: '',
+              fillOpacity: 0.7
+            };
+          },
+          onEachFeature: function (feature, layer) {
+            layer.on({
+              mouseover: function () {
+                layer.setStyle({
+                  weight: 3,
+                  color: '#666',
+                  dashArray: '',
+                  fillOpacity: 0.7
+                });
+                layer.bindPopup(`${feature.properties.name}: ${feature.properties.laudos_ecg} laudos`).openPopup();
+              },
+              mouseout: function () {
+                layer.setStyle({
+                  fillColor: getColor(feature.properties.laudos_ecg),
+                  weight: 1,
+                  opacity: 1,
+                  color: 'black',
+                  dashArray: '',
+                  fillOpacity: 0.7
+                });
+                layer.closePopup();
+              }
+            });
+          }
+        }).addTo(map);
+
+        var legend = L.control({ position: 'bottomright' });
+
+        legend.onAdd = function (map) {
+
+          var div = L.DomUtil.create('div', 'info legend'),
+            grades = [1, 150, 550, 1250, 1700, 2700, 3100],
+            labels = [];
+          div.innerHTML +=
+            '<i style="background:' + getColor(0) + '"></i> ' + '0<br>';
+          for (var i = 0; i < grades.length; i++) {
+            div.innerHTML +=
+              '<i style="background:' + getColor(grades[i] + 1) + '"></i> ' +
+              grades[i] + (grades[i + 1] ? '&ndash;' + grades[i + 1] + '<br>' : '+');
+          }
+          return div;
+        };
+
+        legend.addTo(map);
+
+      } catch (error) {
+        console.error('Erro ao carregar dados do mapa:', error);
+      }
+    }
+
+    fetchData();
+  </script>
+
+</body>
+
+<style>
+  .legend {
+    line-height: 18px;
+    color: #555;
+  }
+
+  .legend i {
+    width: 18px;
+    height: 18px;
+    float: left;
+    margin-right: 8px;
+    opacity: 0.7;
+  }
+</style>
+
+</html>

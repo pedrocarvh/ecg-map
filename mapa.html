@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mapa Interativo do Amazonas</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.7.1/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.7.1/dist/leaflet.js"></script>
+</head>
+<body>
+    <div id="map" style="height: 100vh;"></div>
+
+    <script>
+        // Criar o mapa sem fundo
+        var map = L.map('map').setView([-3.4168, -65.8561], 6);
+
+        async function loadData() {
+            try {
+                const geoJsonResponse = await fetch('geojs-13-mun.json');
+                const geoJsonData = await geoJsonResponse.json();
+                const laudosResponse = await fetch('base.json');
+                const laudosData = await laudosResponse.json();
+
+                // Criar um dicionário para acessar os laudos por município
+                const laudosMap = {};
+                laudosData.municipios.forEach(mun => {
+                    laudosMap[mun.nome] = mun.laudos_ecg;
+                });
+
+                // Atualizar o GeoJSON com os laudos
+                geoJsonData.features.forEach(feature => {
+                    const municipioNome = feature.properties.name;
+                    feature.properties.laudos_ecg = laudosMap[municipioNome] || 0;
+                });
+
+                // Função de estilo para definir a cor dos municípios
+                function getColor(laudos) {
+                    return laudos > 1 ? 'green' : 'red'; // Muda a cor com base no número de laudos
+                }
+
+                // Adicionar ao mapa Leaflet
+                L.geoJSON(geoJsonData, {
+                    style: function (feature) {
+                        return {
+                            color: getColor(feature.properties.laudos_ecg),
+                            weight: 2,
+                            fillOpacity: 0.3
+                        };
+                    },
+                    onEachFeature: function (feature, layer) {
+                        layer.on({
+                            mouseover: function () {
+                                layer.setStyle({
+                                    weight: 5,
+                                    color: '#666',
+                                    dashArray: '',
+                                    fillOpacity: 0.5
+                                });
+                                // Criar e mostrar o popup
+                                layer.bindPopup(`${feature.properties.name}: ${feature.properties.laudos_ecg} exames`).openPopup();
+                            },
+                            mouseout: function () {
+                                // Redefinir o estilo original
+                                geoJsonData.features.forEach(f => {
+                                    if (f.properties.name === feature.properties.name) {
+                                        layer.setStyle({
+                                            color: getColor(f.properties.laudos_ecg),
+                                            weight: 2,
+                                            fillOpacity: 0.3
+                                        });
+                                    }
+                                });
+                                layer.closePopup();
+                            }
+                        });
+                    }
+                }).addTo(map);
+            } catch (error) {
+                console.error("Erro ao carregar os arquivos JSON:", error);
+            }
+        }
+
+        loadData();
+    </script>
+</body>
+</html>
